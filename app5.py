@@ -257,46 +257,51 @@ for col, lbl, val, clr in zip(st.columns(5),
 
 st.markdown("<hr class='div'>", unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["📊  Dashboard", "🩺  Assessment", "📈  Insights"])
-
-
-# TAB 1 — DASHBOARD
-with tab1:
+# ─── TABS ─────────────────────────────────────────────────────────────────────
+page = st.sidebar.radio(
+    "Navigation",
+    ["Dashboard", "Assessment", "Insights"],
+    label_visibility="collapsed"
+)
+if page == "Dashboard":
+    # your dashboard code here
+    st.title("DashBoard")
     st.markdown("<div class='sh'>🎛️ Interactive Filters</div>", unsafe_allow_html=True)
+
     f1, f2, f3, f4 = st.columns(4)
     with f1:
-        g_opts = ["All"] + (sorted(df["Gender"].dropna().unique().tolist()) if "Gender" in df.columns else [])
-        sel_g  = st.selectbox("Gender", g_opts)
+        gender_opts = ["All"] + sorted(df["Gender"].dropna().unique().tolist()) if "Gender" in df.columns else ["All"]
+        sel_gender = st.selectbox("Gender", gender_opts)
     with f2:
-        sel_s  = st.selectbox("Sleep Duration", ["All","Less than 5 hours","5-6 hours","7-8 hours","More than 8 hours"])
+        sleep_opts = ["All"] + ["Less than 5 hours","5-6 hours","7-8 hours","More than 8 hours"]
+        sel_sleep  = st.selectbox("Sleep Duration", sleep_opts)
     with f3:
-        sel_f  = st.selectbox("Financial Stress", ["All","1","2","3","4","5"])
+        fin_opts   = ["All"] + ["1","2","3","4","5"]
+        sel_fin    = st.selectbox("Financial Stress", fin_opts)
     with f4:
-        sel_d  = st.selectbox("Depression Status", ["All","Depressed","Not Depressed"])
+        dep_opts   = ["All","Depressed","Not Depressed"]
+        sel_dep    = st.selectbox("Depression Status", dep_opts)
 
+    # Apply filters
     dff = df.copy()
-
-    if sel_g != "All" and "Gender" in dff.columns:
-        dff = dff[dff["Gender"] == sel_g]
-    if sel_s != "All":
-        dff = dff[dff["Sleep Duration"] == sel_s]
-    if sel_f != "All":
-        dff = dff[dff["Financial Stress"] == int(sel_f)]
-    if sel_d == "Depressed":
+    if sel_gender != "All" and "Gender" in dff.columns:
+        dff = dff[dff["Gender"] == sel_gender]
+    if sel_sleep != "All":
+        dff = dff[dff["Sleep Duration"].astype(str).str.strip("'") == sel_sleep]
+    if sel_fin != "All":
+        dff = dff[pd.to_numeric(dff["Financial Stress"], errors="coerce") == float(sel_fin)]
+    if sel_dep == "Depressed":
         dff = dff[dff["Depression"] == 1]
-    elif sel_d == "Not Depressed":
+    elif sel_dep == "Not Depressed":
         dff = dff[dff["Depression"] == 0]
 
-    if len(dff) == 0:
-        st.warning("No data matches the selected filters. Please adjust your selection.")
-        st.stop()
-
-    fdep  = int(dff["Depression"].sum()) if len(dff) else 0
-    frate = round(fdep/len(dff)*100,1) if len(dff) else 0
+    # Filtered KPIs
     fk1, fk2, fk3 = st.columns(3)
     fk1.markdown(f"<div class='card kpi'><div class='kpi-val' style='color:{BLUE}'>{len(dff):,}</div><div class='kpi-lbl'>Filtered Records</div></div>", unsafe_allow_html=True)
-    fk2.markdown(f"<div class='card kpi'><div class='kpi-val' style='color:{ROSE}'>{fdep:,}</div><div class='kpi-lbl'>Depressed</div></div>", unsafe_allow_html=True)
-    fk3.markdown(f"<div class='card kpi'><div class='kpi-val' style='color:{AMBER}'>{frate}%</div><div class='kpi-lbl'>Depression Rate</div></div>", unsafe_allow_html=True)
+    fdep = int(dff["Depression"].sum()) if "Depression" in dff.columns else 0
+    fk2.markdown(f"<div class='card kpi'><div class='kpi-val' style='color:{ROSE}'>{fdep:,}</div><div class='kpi-lbl'>Depressed (filtered)</div></div>", unsafe_allow_html=True)
+    frate = round(fdep/len(dff)*100,1) if len(dff) else 0
+    fk3.markdown(f"<div class='card kpi'><div class='kpi-val' style='color:{AMBER}'>{frate}%</div><div class='kpi-lbl'>Depression Rate (filtered)</div></div>", unsafe_allow_html=True)
 
     st.markdown("<hr class='div'>", unsafe_allow_html=True)
     st.markdown("<div class='sh'>📊 Distribution Charts</div>", unsafe_allow_html=True)
@@ -304,40 +309,35 @@ with tab1:
     r1c1, r1c2, r1c3 = st.columns(3)
     with r1c1:
         fig, ax = dark_fig()
-        age_data = pd.to_numeric(dff["Age"], errors="coerce").dropna()
-        ax.hist(age_data, bins=20, color=BLUE, alpha=0.8, edgecolor=CARD)
-        ax.axvline(age_data.median(), color=AMBER, ls="--", lw=1.5, label=f"Median: {age_data.median():.0f}")
+        ax.hist(pd.to_numeric(dff["Age"], errors="coerce").dropna(), bins=20,
+                color=BLUE, alpha=0.8, edgecolor=CARD)
+        ax.axvline(pd.to_numeric(dff["Age"], errors="coerce").median(),
+                   color=AMBER, ls="--", lw=1.5, label="Median")
         ax.set_title("Age Distribution", fontweight="bold")
         ax.set_xlabel("Age"); ax.set_ylabel("Count"); ax.legend(fontsize=8, framealpha=0.2)
-        render_fig(fig)
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
     with r1c2:
         so = ["Less than 5 hours","5-6 hours","7-8 hours","More than 8 hours"]
-        sv = dff["Sleep Duration"].value_counts().reindex(so, fill_value=0)
+        sv = dff["Sleep Duration"].astype(str).str.strip("'").value_counts().reindex(so, fill_value=0)
         fig, ax = dark_fig()
-        bar_colors = [ROSE, AMBER, TEAL, BLUE]
         bars = ax.bar(["<5h","5-6h","7-8h",">8h"], sv.values,
-                      color=bar_colors, edgecolor=CARD, alpha=0.85, width=0.6)
-        max_val = max(sv.values) if max(sv.values) > 0 else 1
-        ax.set_ylim(0, max_val * 1.18)
-        for b, v in zip(bars, sv.values):
-            if v > 0:
-                ax.text(b.get_x() + b.get_width()/2, v + max_val * 0.03,
-                        f"{v:,}", ha="center", va="bottom", fontsize=8, color=TEXT)
+                      color=[ROSE,AMBER,TEAL,BLUE], edgecolor=CARD, alpha=0.85)
+        for b,v in zip(bars,sv.values):
+            ax.text(b.get_x()+b.get_width()/2, b.get_height()+20, str(v),
+                    ha="center", fontsize=8, color=TEXT)
         ax.set_title("Sleep Duration", fontweight="bold"); ax.set_ylabel("Count")
-        render_fig(fig)
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
     with r1c3:
-        dc = dff["Dietary Habits"].value_counts()
-        if len(dc) > 0:
-            fig, ax = dark_fig()
-            clrs = [TEAL,AMBER,ROSE,BLUE][:len(dc)]
-            wedges,txts,atxts = ax.pie(dc.values, labels=dc.index, colors=clrs,
-                autopct="%1.1f%%", pctdistance=0.75, startangle=90,
-                wedgeprops={"edgecolor":CARD,"linewidth":2})
-            for t in txts+atxts: t.set_color(TEXT); t.set_fontsize(9)
-            ax.set_title("Dietary Habits", fontweight="bold")
-            render_fig(fig)
+        dc = dff["Dietary Habits"].astype(str).str.strip("'").value_counts()
+        fig, ax = dark_fig()
+        wedges,txts,atxts = ax.pie(dc.values, labels=dc.index, colors=[TEAL,AMBER,ROSE],
+            autopct="%1.1f%%", pctdistance=0.75, startangle=90,
+            wedgeprops={"edgecolor":CARD,"linewidth":2})
+        for t in txts+atxts: t.set_color(TEXT); t.set_fontsize(9)
+        ax.set_title("Dietary Habits", fontweight="bold")
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
     r2c1, r2c2, r2c3 = st.columns(3)
     with r2c1:
@@ -350,26 +350,28 @@ with tab1:
             ax.set_xticks(x); ax.set_xticklabels(gd.index)
             ax.set_title("Depression by Gender", fontweight="bold")
             ax.legend(fontsize=8, framealpha=0.2)
-            render_fig(fig)
+            plt.tight_layout(); st.pyplot(fig); plt.close()
 
     with r2c2:
-        fr = dff.groupby("Financial Stress")["Depression"].mean()*100
-        if len(fr) > 0:
-            fig, ax = dark_fig()
-            bars = ax.bar(fr.index.astype(str), fr.values, color=AMBER, alpha=0.85, edgecolor=CARD)
-            for b,v in zip(bars,fr.values):
-                ax.text(b.get_x()+b.get_width()/2, v+0.5, f"{v:.0f}%",
-                        ha="center", fontsize=8, color=TEXT)
-            ax.set_title("Financial Stress → Depression %", fontweight="bold")
-            ax.set_xlabel("Financial Stress (1-5)"); ax.set_ylabel("Depression %")
-            render_fig(fig)
+        fs = pd.to_numeric(dff["Financial Stress"], errors="coerce")
+        fr = dff.groupby(fs)["Depression"].mean()*100
+        fig, ax = dark_fig()
+        bars = ax.bar(fr.index.astype(str), fr.values, color=AMBER, alpha=0.85, edgecolor=CARD)
+        for b,v in zip(bars,fr.values):
+            ax.text(b.get_x()+b.get_width()/2, v+0.5, f"{v:.0f}%",
+                    ha="center", fontsize=8, color=TEXT)
+        ax.set_title("Financial Stress → Depression %", fontweight="bold")
+        ax.set_xlabel("Financial Stress (1-5)"); ax.set_ylabel("Depression %")
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
     with r2c3:
-        si = dff["Have you ever had suicidal thoughts ?"].value_counts()
+        sc2 = "Have you ever had suicidal thoughts ?"
+        si  = dff[sc2].astype(str).str.strip("'").value_counts()
         fig, ax = dark_fig()
         ax.bar(si.index, si.values, color=[TEAL,ROSE][:len(si)], edgecolor=CARD, alpha=0.85)
-        ax.set_title("Suicidal Thoughts\n★ Strongest Predictor", fontweight="bold"); ax.set_ylabel("Count")
-        render_fig(fig)
+        ax.set_title("Suicidal Thoughts\n★ Strongest Predictor", fontweight="bold")
+        ax.set_ylabel("Count")
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
     r3c1, r3c2 = st.columns(2)
     with r3c1:
@@ -381,43 +383,42 @@ with tab1:
         ax.set_xticks(x); ax.set_xticklabels(fh.index)
         ax.set_title("Depression vs Family History", fontweight="bold")
         ax.legend(fontsize=8, framealpha=0.2)
-        render_fig(fig)
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
     with r3c2:
         dv = dff["Depression"].value_counts()
-        if len(dv) > 0:
-            fig, ax = dark_fig(6,4)
-            ax.pie(dv.values,
-                   labels=[("No Depression" if i==0 else "Depressed") for i in dv.index],
-                   colors=[TEAL,ROSE][:len(dv)],
-                   autopct="%1.1f%%", startangle=90, pctdistance=0.75,
-                   wedgeprops={"edgecolor":CARD,"linewidth":3})
-            for t in ax.texts: t.set_color(TEXT); t.set_fontsize(10)
-            ax.set_title("Overall Depression Rate", fontweight="bold")
-            render_fig(fig)
+        fig, ax = dark_fig(6,4)
+        ax.pie(dv.values, labels=["No Depression","Depressed"], colors=[TEAL,ROSE],
+               autopct="%1.1f%%", startangle=90, pctdistance=0.75,
+               wedgeprops={"edgecolor":CARD,"linewidth":3})
+        for t in ax.texts: t.set_color(TEXT); t.set_fontsize(10)
+        ax.set_title("Overall Depression Rate", fontweight="bold")
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
-    # Plotly scatter — fully interactive
+    # Interactive Plotly scatter
     st.markdown("<div class='sh'>🔬 Interactive Scatter — Financial Stress vs Study Hours</div>", unsafe_allow_html=True)
-    sc_df = dff[["Financial Stress","Work/Study Hours","Age","Depression","Dietary Habits"]].copy()
-    sc_df["Work/Study Hours"] = pd.to_numeric(sc_df["Work/Study Hours"], errors="coerce")
-    sc_df["Status"] = sc_df["Depression"].map({0:"No Depression",1:"Depressed"})
-    sc_df.dropna(subset=["Financial Stress","Work/Study Hours"], inplace=True)
-    if len(sc_df) > 0:
-        fig_sc = px.scatter(sc_df.sample(min(2000, len(sc_df)), random_state=42),
-            x="Financial Stress", y="Work/Study Hours", color="Status",
-            color_discrete_map={"No Depression":TEAL,"Depressed":ROSE},
-            opacity=0.65, hover_data=["Age","Dietary Habits"],
-            title="Financial Stress vs Study Hours (coloured by Depression)")
-        fig_sc.update_layout(paper_bgcolor=CARD, plot_bgcolor=CARD2, font_color=TEXT,
-            title_font_family="Syne", legend_title_text="", height=380,
-            xaxis=dict(gridcolor=BORDER), yaxis=dict(gridcolor=BORDER))
-        st.plotly_chart(fig_sc, use_container_width=True)
+    scatter_df = dff[["Financial Stress","Work/Study Hours","Age","Depression","Dietary Habits"]].copy()
+    scatter_df["Financial Stress"] = pd.to_numeric(scatter_df["Financial Stress"], errors="coerce")
+    scatter_df["Work/Study Hours"] = pd.to_numeric(scatter_df["Work/Study Hours"], errors="coerce")
+    scatter_df["Depression_Label"] = scatter_df["Depression"].map({0:"No Depression",1:"Depressed"})
+    scatter_df = scatter_df.dropna(subset=["Financial Stress","Work/Study Hours"])
+    fig_sc = px.scatter(scatter_df.sample(min(2000,len(scatter_df))),
+        x="Financial Stress", y="Work/Study Hours",
+        color="Depression_Label", size_max=8,
+        color_discrete_map={"No Depression":TEAL,"Depressed":ROSE},
+        opacity=0.65, hover_data=["Age","Dietary Habits"],
+        title="Financial Stress vs Study Hours (coloured by Depression)")
+    fig_sc.update_layout(paper_bgcolor=CARD, plot_bgcolor=CARD2,
+        font_color=TEXT, title_font_family="Syne",
+        legend_title_text="", height=380,
+        xaxis=dict(gridcolor=BORDER), yaxis=dict(gridcolor=BORDER))
+    st.plotly_chart(fig_sc, use_container_width=True)
 
     # Correlation heatmap
     st.markdown("<div class='sh'>🔗 Feature Correlation Heatmap</div>", unsafe_allow_html=True)
-    nc = [c for c in ["Age","Academic Pressure","CGPA","Study Satisfaction",
-                       "Work/Study Hours","Financial Stress","Depression"] if c in dff.columns]
-    corr = dff[nc].apply(pd.to_numeric, errors="coerce").corr()
+    num_cols = [c for c in ["Age","Academic Pressure","CGPA","Study Satisfaction",
+                             "Work/Study Hours","Financial Stress","Depression"] if c in dff.columns]
+    corr = dff[num_cols].apply(pd.to_numeric, errors="coerce").corr()
     fig, ax = plt.subplots(figsize=(11,4.5), facecolor=CARD)
     ax.set_facecolor(CARD)
     sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", ax=ax,
@@ -425,17 +426,19 @@ with tab1:
                 cbar_kws={"shrink":0.8})
     ax.set_title("Feature Correlation Matrix", color=TEXT, fontsize=13, fontweight="bold", pad=10)
     ax.tick_params(colors=TEXT, labelsize=9)
-    render_fig(fig)
+    plt.tight_layout(); st.pyplot(fig); plt.close()
 
+    pass
 
-# TAB 2 — ASSESSMENT
-with tab2:
+elif page == "Assessment":
+    # your assessment code here
+    st.title("Assessment")
     st.markdown(f"""
     <div class='card' style='border-left:4px solid {BLUE};padding:16px 20px;margin-bottom:20px'>
       <b style='font-size:15px'>📋 Mental Health Self-Assessment</b><br>
       <span style='color:{MUTED};font-size:13px'>
-        Answer all 6 questions honestly. Our AdaBoost model will estimate your depression risk.
-        This is <b style='color:{TEXT}'>not a medical diagnosis</b>.
+        Answer all 6 questions honestly. Your responses are used by our AdaBoost model
+        to estimate your depression risk. This is <b style='color:{TEXT}'>not a medical diagnosis</b>.
       </span>
     </div>
     """, unsafe_allow_html=True)
@@ -444,24 +447,36 @@ with tab2:
         q1, q2 = st.columns(2)
         with q1:
             st.markdown("<div class='q-label'>💤 Q1 · How many hours do you sleep daily?</div>", unsafe_allow_html=True)
-            q_sleep = st.select_slider("sleep", options=["Less than 5 hours","5-6 hours","7-8 hours","More than 8 hours"],
-                                       value="7-8 hours", label_visibility="collapsed")
+            q_sleep = st.select_slider("", options=["Less than 5 hours","5-6 hours","7-8 hours","More than 8 hours"],
+                                        value="7-8 hours", key="q_sleep", label_visibility="collapsed")
+
             st.markdown("<div class='q-label'>🥗 Q2 · How would you describe your dietary habits?</div>", unsafe_allow_html=True)
-            q_diet  = st.radio("diet", ["Healthy","Moderate","Unhealthy"], horizontal=True, label_visibility="collapsed")
+            q_diet = st.radio("", ["Healthy","Moderate","Unhealthy"], horizontal=True,
+                              key="q_diet", label_visibility="collapsed")
+
             st.markdown("<div class='q-label'>📚 Q3 · How many hours do you study/work daily?</div>", unsafe_allow_html=True)
-            q_hrs   = st.slider("hrs", 0, 16, 6, label_visibility="collapsed")
+            q_hrs = st.slider("", 0, 16, 6, key="q_hrs", label_visibility="collapsed",
+                              help="Drag to set your average daily study or work hours")
+
         with q2:
-            st.markdown("<div class='q-label'>💰 Q4 · Financial stress level (1=low, 5=high)</div>", unsafe_allow_html=True)
-            q_fin   = st.slider("fin", 1, 5, 2, label_visibility="collapsed")
+            st.markdown("<div class='q-label'>💰 Q4 · How stressed are you about finances? (1=low, 5=high)</div>", unsafe_allow_html=True)
+            q_fin = st.slider("", 1, 5, 2, key="q_fin", label_visibility="collapsed",
+                              help="1 = No financial stress, 5 = Severe financial stress")
+
             st.markdown("<div class='q-label'>💭 Q5 · Have you ever had suicidal thoughts?</div>", unsafe_allow_html=True)
-            q_sui   = st.radio("sui", ["No","Yes"], horizontal=True, label_visibility="collapsed")
+            q_sui = st.radio("", ["No","Yes"], horizontal=True, key="q_sui",
+                             label_visibility="collapsed")
             if q_sui == "Yes":
-                st.markdown(f"<div style='background:#2a1018;border:1px solid {ROSE};border-radius:8px;padding:10px 14px;font-size:12px;color:{ROSE}'>Help is available: <b>iCall 9152987821</b> · <b>Vandrevala 1860-2662-345</b> (24/7)</div>", unsafe_allow_html=True)
-            st.markdown("<div class='q-label'>🧬 Q6 · Family history of mental illness?</div>", unsafe_allow_html=True)
-            q_fam   = st.radio("fam", ["No","Yes"], horizontal=True, label_visibility="collapsed")
+                st.markdown(f"<div style='background:#2a1018;border:1px solid {ROSE};border-radius:8px;padding:10px 14px;font-size:12px;color:{ROSE}'>If you're experiencing suicidal thoughts right now, please reach out: <b>iCall 9152987821</b> or <b>Vandrevala 1860-2662-345</b> (24/7)</div>", unsafe_allow_html=True)
+
+            st.markdown("<div class='q-label'>🧬 Q6 · Is there a family history of mental illness?</div>", unsafe_allow_html=True)
+            q_fam = st.radio("", ["No","Yes"], horizontal=True, key="q_fam",
+                             label_visibility="collapsed")
+
         st.markdown("<br>", unsafe_allow_html=True)
         submitted = st.form_submit_button("🔍  Analyse My Responses", use_container_width=True, type="primary")
 
+    # ── RESULT ────────────────────────────────────────────────────────────────
     if submitted and model_ok:
         ans = {
             "Sleep Duration":                        q_sleep,
@@ -471,10 +486,12 @@ with tab2:
             "Financial Stress":                      q_fin,
             "Family History of Mental Illness":      q_fam,
         }
-        st.session_state["result"] = {"pct": round(predict_prob(mdl, sc, le_map, ans)*100, 1), "ans": ans}
+        prob = predict_prob(mdl, sc, le_map, ans)
+        pct  = round(prob*100, 1)
+        st.session_state["result"] = {"pct": pct, "ans": ans}
 
     if submitted and not model_ok:
-        st.error("Model not ready — check your dataset.")
+        st.error("Model not ready — please check your dataset.")
 
     if "result" in st.session_state:
         pct = st.session_state["result"]["pct"]
@@ -487,47 +504,67 @@ with tab2:
         st.markdown("<hr class='div'>", unsafe_allow_html=True)
         st.markdown("<div class='sh'>🎯 Your Result</div>", unsafe_allow_html=True)
 
-        rl, rr = st.columns([1,1])
-        with rl:
+        res_left, res_right = st.columns([1,1])
+
+        with res_left:
+            # Big % meter
             st.markdown(f"""
             <div style='background:{bg};border:2px solid {clr};border-radius:18px;padding:30px 26px;text-align:center'>
-              <div style='color:{MUTED};font-size:12px;letter-spacing:2px;text-transform:uppercase'>Depression Risk Score</div>
+              <div style='color:{MUTED};font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px'>
+                Depression Risk Score
+              </div>
               <div class='big-pct' style='color:{clr}'>{pct}%</div>
               <div style='font-family:Syne;font-size:20px;font-weight:700;color:{clr};margin-bottom:18px'>{lbl}</div>
+
               <div class='pct-outer'>
                 <div class='pct-inner' style='width:{pct}%;background:linear-gradient(90deg,{clr}55,{clr})'>{pct}%</div>
               </div>
-              <div class='pct-ticks'><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
-              <div style='margin-top:14px;display:flex;justify-content:space-around;font-size:12px'>
-                <span>🟢 Low &lt;35%</span><span>🟡 Moderate 35–60%</span><span>🔴 High &gt;60%</span>
+              <div class='pct-ticks'>
+                <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
               </div>
-            </div>""", unsafe_allow_html=True)
+              <div style='margin-top:16px;display:flex;justify-content:space-around;font-size:12px'>
+                <span>🟢 Low &lt;35%</span>
+                <span>🟡 Moderate 35-60%</span>
+                <span>🔴 High &gt;60%</span>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Responses summary
             st.markdown("<br>", unsafe_allow_html=True)
-            rp1, rp2 = st.columns(2)
-            for i,(l2,v) in enumerate([
-                ("💤 Sleep", ans["Sleep Duration"]),
-                ("🥗 Diet",  ans["Dietary Habits"]),
-                ("📚 Study Hrs", f"{int(ans['Work/Study Hours'])} hrs/day"),
-                ("💰 Fin. Stress", f"{int(ans['Financial Stress'])}/5"),
-                ("💭 Suicidal Thts", ans["Have you ever had suicidal thoughts ?"]),
+            resp_pairs = [
+                ("💤 Sleep",        ans["Sleep Duration"]),
+                ("🥗 Diet",         ans["Dietary Habits"]),
+                ("📚 Study Hours",  f"{int(ans['Work/Study Hours'])} hrs/day"),
+                ("💰 Fin. Stress",  f"{int(ans['Financial Stress'])}/5"),
+                ("💭 Suicidal Thts",ans["Have you ever had suicidal thoughts ?"]),
                 ("🧬 Family Hist.", ans["Family History of Mental Illness"]),
-            ]):
-                (rp1 if i%2==0 else rp2).markdown(f"""
+            ]
+            rp1, rp2 = st.columns(2)
+            for i,(lbl2, val) in enumerate(resp_pairs):
+                col = rp1 if i%2==0 else rp2
+                col.markdown(f"""
                 <div style='background:{CARD};border:1px solid {BORDER};border-radius:10px;
                             padding:10px 14px;margin-bottom:8px;font-size:13px'>
-                  <span style='color:{MUTED}'>{l2}</span><br><b style='color:{TEXT}'>{v}</b>
+                  <span style='color:{MUTED}'>{lbl2}</span><br>
+                  <b style='color:{TEXT}'>{val}</b>
                 </div>""", unsafe_allow_html=True)
 
-        with rr:
+        with res_right:
+            # Plotly gauge
             fig_g = go.Figure(go.Indicator(
-                mode="gauge+number", value=pct,
+                mode="gauge+number",
+                value=pct,
                 number={"suffix":"%","font":{"color":TEXT,"size":44,"family":"Syne"}},
                 gauge={
                     "axis":{"range":[0,100],"tickcolor":TEXT,"tickfont":{"color":TEXT,"size":10}},
-                    "bar":{"color":clr,"thickness":0.3}, "bgcolor":CARD, "bordercolor":BORDER,
-                    "steps":[{"range":[0,35],"color":"#0d2a24"},
-                              {"range":[35,60],"color":"#2a2110"},
-                              {"range":[60,100],"color":"#2a1018"}],
+                    "bar":{"color":clr,"thickness":0.3},
+                    "bgcolor":CARD,"bordercolor":BORDER,
+                    "steps":[
+                        {"range":[0,35],  "color":"#0d2a24"},
+                        {"range":[35,60], "color":"#2a2110"},
+                        {"range":[60,100],"color":"#2a1018"},
+                    ],
                     "threshold":{"line":{"color":"white","width":3},"thickness":0.85,"value":pct}
                 },
                 title={"text":"Risk Gauge","font":{"color":TEXT,"size":15,"family":"Syne"}}
@@ -536,65 +573,97 @@ with tab2:
                                 margin=dict(l=30,r=30,t=60,b=10), height=320)
             st.plotly_chart(fig_g, use_container_width=True)
 
+            # Plotly bar — my scores vs avg
+            st.markdown(f"<div style='font-size:13px;color:{MUTED};font-weight:600;margin-bottom:8px'>📊 Your Profile vs Dataset Average</div>", unsafe_allow_html=True)
             sleep_map = {"Less than 5 hours":3.5,"5-6 hours":5.5,"7-8 hours":7.5,"More than 8 hours":9}
+            user_vals = [sleep_map.get(ans["Sleep Duration"],6),
+                         float(ans["Work/Study Hours"]),
+                         float(ans["Financial Stress"])*1.6]
+            avg_vals  = [
+                df["Sleep Duration"].astype(str).str.strip("'").map(sleep_map).mean(),
+                pd.to_numeric(df["Work/Study Hours"],errors="coerce").mean(),
+                pd.to_numeric(df["Financial Stress"],errors="coerce").mean()*1.6
+            ]
             fig_bar = go.Figure()
-            fig_bar.add_trace(go.Bar(name="You",
-                x=["Sleep Hrs","Study Hrs","Fin.Stress×1.6"],
-                y=[sleep_map.get(ans["Sleep Duration"],6), float(ans["Work/Study Hours"]), float(ans["Financial Stress"])*1.6],
-                marker_color=clr, opacity=0.9))
-            fig_bar.add_trace(go.Bar(name="Avg Student",
-                x=["Sleep Hrs","Study Hrs","Fin.Stress×1.6"],
-                y=[df["Sleep Duration"].astype(str).str.strip("'").map(sleep_map).mean(),
-                   pd.to_numeric(df["Work/Study Hours"],errors="coerce").mean(),
-                   pd.to_numeric(df["Financial Stress"],errors="coerce").mean()*1.6],
-                marker_color=MUTED, opacity=0.6))
+            fig_bar.add_trace(go.Bar(name="You", x=["Sleep Hrs","Study Hrs","Fin.Stress×1.6"],
+                                     y=user_vals, marker_color=clr, opacity=0.9))
+            fig_bar.add_trace(go.Bar(name="Avg Student", x=["Sleep Hrs","Study Hrs","Fin.Stress×1.6"],
+                                     y=avg_vals, marker_color=MUTED, opacity=0.6))
             fig_bar.update_layout(barmode="group", paper_bgcolor=CARD, plot_bgcolor=CARD2,
                 font_color=TEXT, height=230, margin=dict(l=10,r=10,t=10,b=30),
-                legend=dict(font=dict(size=11)), xaxis=dict(gridcolor=BORDER), yaxis=dict(gridcolor=BORDER))
+                legend=dict(font=dict(size=11)), xaxis=dict(gridcolor=BORDER),
+                yaxis=dict(gridcolor=BORDER))
             st.plotly_chart(fig_bar, use_container_width=True)
 
         st.markdown("<hr class='div'>", unsafe_allow_html=True)
+
+        # ── RECOMMENDATIONS ───────────────────────────────────────────────────
         st.markdown("<div class='sh'>💡 Personalised Recommendations</div>", unsafe_allow_html=True)
 
         recs = []
         if pct >= 60:
             recs.append(("rose","🏥 Seek Professional Support",
-                "Your risk score is high. Please consider speaking with a licensed therapist. Professional support can make a significant difference. You don't have to face this alone."))
+                "Your risk score is high. Please consider speaking with a licensed therapist or "
+                "counsellor. This is not a diagnosis, but professional support can make a "
+                "significant difference. You don't have to face this alone."))
         if ans["Have you ever had suicidal thoughts ?"] == "Yes":
             recs.append(("rose","🆘 Immediate Support Is Available",
-                "Help is available right now — iCall: 9152987821 | Vandrevala Foundation: 1860-2662-345 (24/7). Please reach out today."))
+                "You've indicated past suicidal thoughts. Help is available right now — "
+                "iCall: 9152987821 | Vandrevala Foundation: 1860-2662-345 (24/7, India). "
+                "Please reach out to a trusted person, counsellor, or these helplines today."))
         if ans["Sleep Duration"] in ["Less than 5 hours","5-6 hours"]:
             recs.append(("amber","💤 Improve Your Sleep",
-                "Aim for 7–9 hours: fixed bedtime, no screens 1 hr before bed, no caffeine after 3 PM. Even 30 extra minutes shifts your mood noticeably."))
+                "You're getting less than 7 hours. Poor sleep is one of the strongest depression "
+                "drivers. Aim for 7–9 hours: set a fixed bedtime, avoid screens 1 hr before bed, "
+                "limit caffeine after 3 PM. Even 30 extra minutes can shift your mood noticeably."))
         if ans["Dietary Habits"] == "Unhealthy":
             recs.append(("amber","🥗 Nourish Your Brain",
-                "Omega-3 foods (fish, walnuts, flaxseed), leafy greens, and whole grains support serotonin. Reduce processed food and sugar — both amplify mood instability."))
+                "Diet and mental health are deeply linked. Omega-3 foods (fish, walnuts, flaxseed), "
+                "leafy greens, and whole grains support serotonin production. Reduce processed "
+                "food and sugar — both amplify mood instability and energy crashes."))
         if int(ans["Financial Stress"]) >= 4:
             recs.append(("amber","💰 Tackle Financial Anxiety",
-                "Break it into small steps: speak with a student advisor, explore scholarships, or use a budgeting app. Writing it down reduces mental overwhelm."))
+                "High financial stress is a major depression trigger. Break it into small steps: "
+                "speak with a student advisor, explore scholarships, or use a budgeting app. "
+                "Externalising the problem (writing it down) reduces mental overwhelm significantly."))
         if int(ans["Work/Study Hours"]) >= 10:
             recs.append(("amber","📚 Protect Recovery Time",
-                f"Studying {int(ans['Work/Study Hours'])} hrs/day risks burnout. Try Pomodoro (25 min on, 5 off) and schedule one full rest day per week."))
+                f"Studying/working {int(ans['Work/Study Hours'])} hrs/day puts you at burnout risk. "
+                "Use Pomodoro (25 min on, 5 min off). Schedule at least one full rest day per week. "
+                "Cognitive performance and mood both drop sharply without adequate recovery."))
         if ans["Family History of Mental Illness"] == "Yes":
             recs.append(("teal","🧬 Proactive Mental Health Checks",
-                "Family history increases baseline risk. Regular check-ins and a strong support network are key preventive strategies."))
+                "Family history increases baseline risk. Regular check-ins — even when you feel fine — "
+                "and a strong support network are key preventive strategies. Consider periodic "
+                "sessions with a therapist as a proactive, not reactive, measure."))
+
         recs.append(("teal","🏃 Move Your Body",
-            "30 min of moderate exercise 5× per week reduces depression comparably to medication in mild cases. A 15-min walk or yoga counts."))
+            "30 minutes of moderate exercise 5x per week reduces depression comparably to medication "
+            "in mild-to-moderate cases. Start small: a 15-min walk, yoga, or dancing counts. "
+            "Movement directly raises serotonin, dopamine, and BDNF (brain growth factor)."))
         recs.append(("teal","🧘 Mindfulness & Social Connection",
-            "5–10 min of daily mindfulness reduces rumination. Prioritise at least one meaningful social interaction daily."))
-        recs.append(("purple","📖 Track Your Mood",
-            "A one-sentence daily journal reveals hidden patterns. Apps like Daylio make it effortless. Awareness is the first step to change."))
+            "5–10 minutes of daily mindfulness (Headspace, Insight Timer — both free) significantly "
+            "reduces rumination. Prioritise at least one meaningful social interaction daily — "
+            "isolation is one of the strongest depression amplifiers."))
+        recs.append(("purple","📖 Track Your Mood Daily",
+            "Keep a simple mood journal (1 sentence is enough). Patterns often reveal hidden triggers "
+            "— sleep, food, or certain interactions. Apps like Daylio make this frictionless. "
+            "Awareness is consistently the first and most impactful step to change."))
 
         rc1, rc2 = st.columns(2)
-        for i,(style,title,body) in enumerate(recs):
-            (rc1 if i%2==0 else rc2).markdown(f"""
+        for i, (style, title, body) in enumerate(recs):
+            col = rc1 if i%2==0 else rc2
+            col.markdown(f"""
             <div class='rec {style}'>
               <div class='rec-title'>{title}</div>
               <div class='rec-body'>{body}</div>
             </div>""", unsafe_allow_html=True)
 
         st.markdown("<hr class='div'>", unsafe_allow_html=True)
+
+        # ── POSITIVE THOUGHTS ─────────────────────────────────────────────────
         st.markdown("<div class='sh'>🌱 Affirmations for You</div>", unsafe_allow_html=True)
+
         all_thoughts = [
             "\"You are not your worst day. Every small step forward — even just getting up — is a victory worth acknowledging.\"",
             "\"Asking for help is one of the bravest things a person can do. It takes more strength to reach out than to stay silent.\"",
@@ -606,20 +675,25 @@ with tab2:
             "\"Being kind to yourself in hard moments is not weakness — it is the most productive thing you can do.\"",
         ]
         random.seed(int(pct * 13))
+        selected = random.sample(all_thoughts, 3)
         tc1, tc2, tc3 = st.columns(3)
-        for col, t in zip([tc1,tc2,tc3], random.sample(all_thoughts, 3)):
-            col.markdown(f"<div class='thought'>{t}</div>", unsafe_allow_html=True)
+        for col, thought in zip([tc1,tc2,tc3], selected):
+            col.markdown(f"<div class='thought'>{thought}</div>", unsafe_allow_html=True)
 
+        # Disclaimer
         st.markdown(f"""
         <div style='background:{CARD};border:1px solid {BORDER};border-radius:10px;
                     padding:12px 16px;margin-top:6px;font-size:12px;color:{MUTED}'>
-        ⚠️ <b style='color:{TEXT}'>Disclaimer:</b> For educational purposes only. Not a medical diagnosis.
-        If distressed, contact a qualified mental health professional.
-        </div>""", unsafe_allow_html=True)
+        ⚠️ <b style='color:{TEXT}'>Disclaimer:</b> This tool is for educational purposes only.
+        It does not constitute a medical diagnosis or professional mental health advice.
+        If you are in distress, consult a qualified mental health professional or contact a crisis helpline.
+        </div>
+        """, unsafe_allow_html=True)
+    pass
 
-
-# TAB 3 — INSIGHTS
-with tab3:
+elif page == "Insights":
+    # your insights code here
+    st.title("Insights")
     st.markdown("<div class='sh'>📈 Advanced Risk Analytics</div>", unsafe_allow_html=True)
 
     ai1, ai2 = st.columns(2)
@@ -631,8 +705,8 @@ with tab3:
         ax.plot(sd.index, sd.values, color=ROSE, lw=2.5, marker="o", ms=5)
         ax.fill_between(sd.index, sd.values, alpha=0.15, color=ROSE)
         ax.set_title("Depression Rate vs Combined Stress", fontweight="bold")
-        ax.set_xlabel("Stress Index"); ax.set_ylabel("Depression %")
-        render_fig(fig)
+        ax.set_xlabel("Stress Index (Academic+Financial)"); ax.set_ylabel("Depression %")
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
     with ai2:
         if "Study Satisfaction" in df.columns:
@@ -643,7 +717,7 @@ with tab3:
             ax.invert_xaxis()
             ax.set_title("Low Study Satisfaction → High Depression", fontweight="bold")
             ax.set_xlabel("Study Satisfaction (5→1)"); ax.set_ylabel("Depression %")
-            render_fig(fig)
+            plt.tight_layout(); st.pyplot(fig); plt.close()
 
     ai3, ai4 = st.columns(2)
     with ai3:
@@ -654,7 +728,7 @@ with tab3:
             ax.fill_between(ap.index, ap.values, alpha=0.15, color=BLUE)
             ax.set_title("Academic Pressure → Study Hours", fontweight="bold")
             ax.set_xlabel("Pressure (1-5)"); ax.set_ylabel("Avg Study Hours")
-            render_fig(fig)
+            plt.tight_layout(); st.pyplot(fig); plt.close()
 
     with ai4:
         slp_ord = ["Less than 5 hours","5-6 hours","7-8 hours","More than 8 hours"]
@@ -665,12 +739,13 @@ with tab3:
         ax.bar(["<5h","5-6h","7-8h",">8h"][:len(slp)], slp.values,
                color=[ROSE,AMBER,TEAL,BLUE][:len(slp)], edgecolor=CARD, alpha=0.85)
         ax.set_title("Sleep Duration vs Depression %", fontweight="bold"); ax.set_ylabel("%")
-        render_fig(fig)
+        plt.tight_layout(); st.pyplot(fig); plt.close()
 
+    # Risk curve
     st.markdown("<div class='sh'>⚠️ Risk Accumulation Curve</div>", unsafe_allow_html=True)
     df["_rc"] = (
         (df["Have you ever had suicidal thoughts ?"].astype(str).str.strip("'")=="Yes").astype(int) +
-        (pd.to_numeric(df["Financial Stress"], errors="coerce").fillna(0) >= 4).astype(int) +
+        (pd.to_numeric(df["Financial Stress"],errors="coerce")>=4).astype(int) +
         (df["Sleep Duration"].astype(str).str.strip("'")=="Less than 5 hours").astype(int) +
         (df["Family History of Mental Illness"].astype(str).str.strip("'")=="Yes").astype(int)
     )
@@ -680,18 +755,20 @@ with tab3:
     ax.fill_between(rc.index, rc.values, alpha=0.2, color="#c0392b")
     ax.set_title("How Depression Risk Explodes with More Risk Factors", fontweight="bold")
     ax.set_xlabel("Active Risk Factors"); ax.set_ylabel("Depression Rate (%)")
-    render_fig(fig)
+    plt.tight_layout(); st.pyplot(fig); plt.close()
 
+    # Top cities + CGPA
     bi1, bi2 = st.columns([1,2])
     with bi1:
         if "City" in df.columns:
             st.markdown("<div class='sh'>🗺️ Top 10 Cities</div>", unsafe_allow_html=True)
             cities = df[df["Depression"]==1]["City"].value_counts().head(10)
             fig, ax = dark_fig(5,5)
-            ax.barh(cities.index[::-1], cities.values[::-1],
-                    color=[ROSE,AMBER,BLUE,TEAL,PURPLE]*3, edgecolor=CARD, alpha=0.9)
-            ax.set_title("Most Depressed by City", fontweight="bold"); ax.set_xlabel("Count")
-            render_fig(fig)
+            pal = [ROSE,AMBER,BLUE,TEAL,PURPLE]*3
+            ax.barh(cities.index[::-1], cities.values[::-1], color=pal[:10], edgecolor=CARD, alpha=0.9)
+            ax.set_title("Most Depressed Students by City", fontweight="bold")
+            ax.set_xlabel("Count")
+            plt.tight_layout(); st.pyplot(fig); plt.close()
 
     with bi2:
         if "CGPA" in df.columns:
@@ -702,15 +779,17 @@ with tab3:
             fig, ax = dark_fig(8,5)
             if 0 in ca: ax.plot(mids, ca[0], color=TEAL, lw=2, marker="o", ms=4, label="No Depression")
             if 1 in ca: ax.plot(mids, ca[1], color=ROSE, lw=2, marker="o", ms=4, label="Depressed")
-            ax.set_title("Depressed Students — CGPA by Age", fontweight="bold")
-            ax.set_xlabel("Age"); ax.set_ylabel("Avg CGPA"); ax.legend(fontsize=9, framealpha=0.2)
-            render_fig(fig)
+            ax.set_title("Depressed Students Often Have Same or Higher CGPA", fontweight="bold")
+            ax.set_xlabel("Age"); ax.set_ylabel("Avg CGPA")
+            ax.legend(fontsize=9, framealpha=0.2)
+            plt.tight_layout(); st.pyplot(fig); plt.close()
 
 
+# ─── FOOTER ───────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div style='text-align:center;padding:14px 0 6px;color:{MUTED};font-size:11px;
             border-top:1px solid {BORDER};margin-top:24px'>
-  MindPulse · Streamlit + scikit-learn · Educational use only ·
+  MindPulse v3 · Streamlit + scikit-learn · Educational use only ·
   Crisis: <b style='color:{ROSE}'>iCall 9152987821</b> ·
   <b style='color:{ROSE}'>Vandrevala 1860-2662-345</b>
 </div>
