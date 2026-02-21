@@ -745,7 +745,7 @@ elif page == "Insights":
     st.markdown("<div class='sh'>⚠️ Risk Accumulation Curve</div>", unsafe_allow_html=True)
     df["_rc"] = (
         (df["Have you ever had suicidal thoughts ?"].astype(str).str.strip("'")=="Yes").astype(int) +
-        (pd.to_numeric(df["Financial Stress"],errors="coerce")>=4).astype(int) +
+        (pd.to_numeric(df["Financial Stress"], errors="coerce").fillna(0) >= 4).astype(int) +
         (df["Sleep Duration"].astype(str).str.strip("'")=="Less than 5 hours").astype(int) +
         (df["Family History of Mental Illness"].astype(str).str.strip("'")=="Yes").astype(int)
     )
